@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:" />
+  <title>Project Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">▸</span>
+      <span>Project Launcher</span>
+    </div>
+    <input id="search" type="search" placeholder="Search projects  ( / )" autocomplete="off" spellcheck="false" />
+    <div class="filters" role="tablist">
+      <button class="chip active" data-filter="all">All</button>
+      <button class="chip" data-filter="favorites">★ Favorites</button>
+      <button class="chip" data-filter="running">Running</button>
+      <button class="chip" data-filter="dirty">Uncommitted</button>
+    </div>
+    <div class="spacer"></div>
+    <button id="refresh" class="icon-btn" title="Rescan projects (Ctrl+R)">⟳</button>
+    <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+  </header>
+
+  <main class="layout">
+    <aside class="list-pane">
+      <div id="root-label" class="root-label"></div>
+      <div id="project-list" class="project-list"></div>
+    </aside>
+    <section id="detail" class="detail-pane">
+      <div class="empty">Select a project</div>
+    </section>
+  </main>
+
+  <dialog id="settings-dialog">
+    <form method="dialog" class="settings-form">
+      <h2>Settings</h2>
+      <label>Projects folder</label>
+      <div class="row">
+        <code id="settings-root"></code>
+        <button type="button" id="choose-root">Change…</button>
+      </div>
+      <label for="settings-editor">Editor command</label>
+      <input id="settings-editor" type="text" spellcheck="false" />
+      <p class="hint">Run as <code>&lt;command&gt; "&lt;project path&gt;"</code>, e.g. <code>code</code>, <code>cursor</code>, <code>idea64</code>.</p>
+      <div class="row end">
+        <button value="cancel">Close</button>
+        <button id="save-settings" value="save" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

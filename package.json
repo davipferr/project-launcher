@@ -1,0 +1,16 @@
+{
+  "name": "project-launcher",
+  "version": "0.1.0",
+  "description": "Desktop launcher for every project in Documents/projetos: git status, open in editor, start with one click.",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^44.7.0"
+  }
+}

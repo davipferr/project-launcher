@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   getSettings: invoke('settings:get'),
   chooseRoot: invoke('settings:chooseRoot'),
   setEditor: invoke('settings:setEditor'),
+  choosePortfolio: invoke('settings:choosePortfolio'),
 
   scan: invoke('projects:scan'),
   gitStatus: invoke('projects:git'),
@@ -20,6 +21,10 @@ contextBridge.exposeInMainWorld('api', {
   setDefaultCommand: invoke('projects:setDefault'),
   addCommand: invoke('projects:addCommand'),
   removeCommand: invoke('projects:removeCommand'),
+
+  portfolioInfo: invoke('portfolio:info'),
+  portfolioPrefill: invoke('portfolio:prefill'),
+  portfolioSave: invoke('portfolio:save'),
 
   openEditor: invoke('open:editor'),
   openFolder: invoke('open:folder'),

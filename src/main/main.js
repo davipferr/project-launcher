@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const { Settings } = require('./settings');
 const projects = require('./projects');
 const git = require('./git');
+const portfolio = require('./portfolio');
 const { ProcessManager } = require('./processes');
 
 const IS_WIN = process.platform === 'win32';
@@ -115,6 +116,20 @@ function withCustom(proj) {
   };
 }
 
+/** The portfolio clone: the one chosen in settings, else the first scanned project that looks like one. */
+async function portfolioDir() {
+  const chosen = settings.get().portfolio;
+  if (chosen) return (await portfolio.isPortfolio(chosen)) ? chosen : null;
+  for (const p of known.values()) if (await portfolio.isPortfolio(p.path)) return p.path;
+  return null;
+}
+
+async function requirePortfolio() {
+  const dir = await portfolioDir();
+  if (!dir) throw new Error('No portfolio folder found. Choose it in Settings.');
+  return dir;
+}
+
 function detached(cmd, args, opts = {}) {
   const child = spawn(cmd, args, { detached: true, stdio: 'ignore', ...opts });
   child.on('error', (err) => send('toast', `Could not run ${cmd}: ${err.message}`));
@@ -149,6 +164,19 @@ function registerIpc() {
   ipcMain.handle('settings:setEditor', (_e, editor) => {
     if (typeof editor !== 'string' || !editor.trim()) throw new Error('Editor command required');
     return settings.update((s) => (s.editor = editor.trim()));
+  });
+
+  ipcMain.handle('settings:choosePortfolio', async () => {
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Choose your portfolio folder',
+      defaultPath: settings.get().portfolio || settings.get().root,
+      properties: ['openDirectory'],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    if (!(await portfolio.isPortfolio(res.filePaths[0]))) {
+      throw new Error('That folder has no content/project.schema.json, so it is not the portfolio.');
+    }
+    return settings.update((s) => (s.portfolio = res.filePaths[0]));
   });
 
   ipcMain.handle('projects:scan', async () => {
@@ -193,6 +221,36 @@ function registerIpc() {
       if (s.defaultCommand[p] === id) delete s.defaultCommand[p];
     });
     return withCustom(project(p));
+  });
+
+  // ---- portfolio ----
+  /** Where the portfolio is and which scanned projects already have an entry in it. */
+  ipcMain.handle('portfolio:info', async () => {
+    const dir = await portfolioDir();
+    if (!dir) return { path: null, entries: {} };
+    const slugs = new Set((await portfolio.listEntries(dir)).map((e) => e.slug));
+    const remembered = settings.get().portfolioEntries;
+    const entries = {};
+    for (const p of known.values()) {
+      const slug = [remembered[p.path], portfolio.slugify(p.name)].find((s) => s && slugs.has(s));
+      if (slug) entries[p.path] = slug;
+    }
+    return { path: dir, entries };
+  });
+
+  ipcMain.handle('portfolio:prefill', async (_e, p) => {
+    const proj = project(p);
+    const dir = await requirePortfolio();
+    const { entry, existing } = await portfolio.prefill(dir, proj, settings.get().portfolioEntries[p]);
+    return { portfolio: dir, entry, existing, options: await portfolio.options(dir) };
+  });
+
+  ipcMain.handle('portfolio:save', async (_e, p, entry) => {
+    project(p);
+    const dir = await requirePortfolio();
+    const result = await portfolio.save(dir, entry);
+    if (result.ok) settings.update((s) => (s.portfolioEntries[p] = result.slug));
+    return result;
   });
 
   ipcMain.handle('open:editor', (_e, p) => {

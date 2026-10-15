@@ -45,11 +45,21 @@
       <label for="settings-editor">Editor command</label>
       <input id="settings-editor" type="text" spellcheck="false" />
       <p class="hint">Run as <code>&lt;command&gt; "&lt;project path&gt;"</code>, e.g. <code>code</code>, <code>cursor</code>, <code>idea64</code>.</p>
+      <label>Portfolio folder</label>
+      <div class="row">
+        <code id="settings-portfolio"></code>
+        <button type="button" id="choose-portfolio">Change…</button>
+      </div>
+      <p class="hint">Local clone of the portfolio site. "Add to portfolio" writes <code>content/projects/&lt;slug&gt;.json</code> there.</p>
       <div class="row end">
         <button value="cancel">Close</button>
         <button id="save-settings" value="save" class="primary">Save</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="portfolio-dialog">
+    <form id="portfolio-form" class="pf-form" novalidate></form>
   </dialog>
 
   <div id="toast" class="toast" hidden></div>

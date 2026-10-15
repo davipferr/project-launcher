@@ -14,6 +14,7 @@ const state = {
   selectedRun: new Map(), // project path -> runId shown in the log view
   filter: 'all',
   query: '',
+  portfolio: { path: null, entries: {} }, // entries: projectPath -> slug
 };
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -63,6 +64,7 @@ async function scan() {
   $('#root-label').textContent = res.error || `${res.projects.length} projects in ${res.root}`;
   $('#root-label').classList.toggle('error', !!res.error);
   if (state.selected && !state.byPath.has(state.selected)) state.selected = null;
+  state.portfolio = await api.portfolioInfo();
   renderList();
   renderDetail();
   refreshGit();
@@ -132,7 +134,7 @@ function rowHtml(p) {
   return `
     <div class="row-main">
       <span class="status-dot ${running ? 'running' : ''}"></span>
-      <span class="name">${p.favorite ? '<span class="star">★</span>' : ''}${esc(p.name)}</span>
+      <span class="name">${p.favorite ? '<span class="star">★</span>' : ''}${esc(p.name)}${state.portfolio.entries[p.path] ? '<span class="in-pf" title="In your portfolio">✦</span>' : ''}</span>
       <span class="types">${p.types.slice(0, 3).map((t) => `<span class="badge t-${t}">${t}</span>`).join('')}</span>
       ${quick}
     </div>
@@ -187,6 +189,7 @@ function renderDetail() {
         <div class="path" title="${esc(p.path)}">${esc(p.path)}</div>
       </div>
       <div class="actions">
+        ${portfolioButton(p)}
         <button data-action="editor" title="Open in editor (E)">⌨ Editor</button>
         <button data-action="folder" title="Open in Explorer">🗀 Folder</button>
         <button data-action="terminal" title="Open a terminal here (T)">›_ Terminal</button>
@@ -200,6 +203,13 @@ function renderDetail() {
   renderCommands();
   renderGit();
   renderRuns();
+}
+
+function portfolioButton(p) {
+  if (!state.portfolio.path || p.path === state.portfolio.path) return '';
+  return state.portfolio.entries[p.path]
+    ? '<button data-action="portfolio" title="Edit this project’s entry in your portfolio">✦ Portfolio entry</button>'
+    : '<button data-action="portfolio" class="primary" title="Write a portfolio entry for this project">✦ Add to portfolio</button>';
 }
 
 function renderCommands() {
@@ -410,6 +420,7 @@ const actions = {
   'remove-run': (p) => api.removeRun(state.selectedRun.get(p.path)),
   'open-url': (p) => api.openUrl(state.runs.get(state.selectedRun.get(p.path)).url),
   'open-link': (_p, el) => api.openUrl(el.textContent),
+  portfolio: (p) => openPortfolioForm(p),
 };
 
 document.addEventListener('click', (e) => {
@@ -450,7 +461,8 @@ document.querySelectorAll('.chip').forEach((chip) =>
 $('#refresh').addEventListener('click', scan);
 
 document.addEventListener('keydown', (e) => {
-  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName);
+  if (document.querySelector('dialog[open]')) return; // dialogs handle their own keys
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   if ((e.key === '/' && !typing) || (e.ctrlKey && e.key === 'f')) {
     e.preventDefault();
     $('#search').focus();
@@ -486,7 +498,19 @@ $('#settings-btn').addEventListener('click', async () => {
   const s = await api.getSettings();
   $('#settings-root').textContent = s.root;
   $('#settings-editor').value = s.editor;
+  showPortfolioSetting(s);
   dlg.showModal();
+});
+function showPortfolioSetting(s) {
+  $('#settings-portfolio').textContent = s.portfolio || (state.portfolio.path ? `${state.portfolio.path} (auto-detected)` : 'not found');
+}
+$('#choose-portfolio').addEventListener('click', async () => {
+  const s = await call(api.choosePortfolio);
+  if (!s) return;
+  showPortfolioSetting(s);
+  state.portfolio = await api.portfolioInfo();
+  renderList();
+  renderDetail();
 });
 $('#choose-root').addEventListener('click', async () => {
   const s = await call(api.chooseRoot);
@@ -496,6 +520,151 @@ $('#choose-root').addEventListener('click', async () => {
   }
 });
 $('#save-settings').addEventListener('click', () => call(api.setEditor, $('#settings-editor').value));
+
+// ---- add to portfolio --------------------------------------------------------
+// The form edits one content/projects/<slug>.json in the portfolio clone. Main
+// writes it and runs the site's `npm run validate`; nothing is committed.
+const pfDialog = $('#portfolio-dialog');
+const pfForm = $('#portfolio-form');
+let pf = null; // { project, portfolio, entry, existing, options }
+
+async function openPortfolioForm(p) {
+  const data = await call(api.portfolioPrefill, p.path);
+  pf = { project: p, ...data };
+  renderPortfolioForm();
+  pfDialog.showModal();
+  pfForm.querySelector(pf.existing ? '[name="tagline.pt"]' : '[name="title"]').focus();
+}
+
+function renderPortfolioForm() {
+  const { entry: e, options: o, existing, portfolio } = pf;
+  const opt = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
+  const constellations = o.constellations.map((z) => {
+    const mine = e.constellation === z.id;
+    const used = z.used - (mine && existing ? 1 : 0);
+    const full = used >= z.stars;
+    return opt(z.id, `${z.name.en} · ${used}/${z.stars} stars taken${full ? ' (full: shown by category)' : ''}`, mine);
+  }).join('');
+  const lang = (code, title) => `
+    <fieldset class="pf-lang">
+      <legend>${title}</legend>
+      <label><span>Tagline <span class="hint">one line, shown on cards</span></span>
+        <input name="tagline.${code}" value="${esc(e.tagline?.[code])}" required />
+      </label>
+      <label><span>Description <span class="hint">blank line = new paragraph</span></span>
+        <textarea name="description.${code}" rows="7" required>${esc(e.description?.[code])}</textarea>
+      </label>
+    </fieldset>`;
+  pfForm.innerHTML = `
+    <h2>${existing ? 'Edit portfolio entry' : 'Add to portfolio'} <span class="muted">${esc(pf.project.name)}</span></h2>
+    <p class="hint">Writes <code>content/projects/<span data-slug>${esc(e.slug)}</span>.json</code> in <code>${esc(portfolio)}</code>, then runs <code>npm run validate</code>. Nothing is committed.</p>
+    <div class="pf-grid">
+      <label>Title <input name="title" value="${esc(e.title)}" maxlength="60" required /></label>
+      <label>Slug <input name="slug" value="${esc(e.slug)}" pattern="[a-z0-9]+(-[a-z0-9]+)*" ${existing ? 'readonly title="An existing entry keeps its file name"' : ''} required /></label>
+      <label>Category <select name="category">${o.categories.map((c) => opt(c, c, c === e.category)).join('')}</select></label>
+      <label>Constellation <select name="constellation">${opt('', 'None (grouped by category)', !e.constellation)}${constellations}</select></label>
+      <label>Started <input name="date" type="date" value="${esc(e.date)}" required /></label>
+      <label>Status <select name="status">${opt('', '—', !e.status)}${o.statuses.map((s) => opt(s, s, s === e.status)).join('')}</select></label>
+      <label class="wide"><span>Tags <span class="hint">comma separated</span></span><input name="tags" value="${esc((e.tags || []).join(', '))}" spellcheck="false" /></label>
+      <label class="wide">Repository <input name="repoUrl" type="url" value="${esc(e.repoUrl)}" placeholder="https://github.com/…" spellcheck="false" /></label>
+      <label class="wide">Live demo <input name="liveUrl" type="url" value="${esc(e.liveUrl)}" placeholder="https://…" spellcheck="false" /></label>
+      <label class="wide check"><input name="featured" type="checkbox" ${e.featured ? 'checked' : ''} /> Featured <span class="hint">listed first, bigger star, first pick of constellation stars</span></label>
+    </div>
+    <div class="pf-langs">${lang('en', 'English')}${lang('pt', 'Português')}</div>
+    <pre class="pf-output" hidden></pre>
+    <div class="row end">
+      <button type="button" data-pf="close">Cancel</button>
+      <button type="submit" class="primary">Save</button>
+    </div>`;
+}
+
+function readPortfolioForm() {
+  const f = new FormData(pfForm);
+  const get = (k) => String(f.get(k) ?? '').trim();
+  return {
+    ...pf.entry, // keeps fields the form doesn't edit (cover, images)
+    slug: get('slug'),
+    title: get('title'),
+    tagline: { en: get('tagline.en'), pt: get('tagline.pt') },
+    description: { en: get('description.en'), pt: get('description.pt') },
+    category: get('category'),
+    constellation: get('constellation'),
+    tags: get('tags').split(',').map((t) => t.trim()).filter(Boolean),
+    repoUrl: get('repoUrl'),
+    liveUrl: get('liveUrl'),
+    featured: f.get('featured') === 'on',
+    date: get('date'),
+    status: get('status'),
+  };
+}
+
+function showPortfolioResult(text, kind) {
+  const out = pfForm.querySelector('.pf-output');
+  out.hidden = false;
+  out.className = `pf-output ${kind}`;
+  out.textContent = text;
+  out.scrollIntoView({ block: 'nearest' });
+}
+
+pfForm.addEventListener('input', (e) => {
+  if (e.target.name === 'slug') pfForm.querySelector('[data-slug]').textContent = e.target.value;
+});
+
+pfForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!pfForm.reportValidity()) return;
+  const entry = readPortfolioForm();
+  const saveBtn = pfForm.querySelector('[type="submit"]');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Validating…';
+  try {
+    const res = await call(api.portfolioSave, pf.project.path, entry);
+    if (!res.ok) {
+      showPortfolioResult(`Not saved: npm run validate failed.\n\n${res.output}`, 'error');
+      return;
+    }
+    pf.entry = entry;
+    pf.existing = true;
+    state.portfolio = await api.portfolioInfo();
+    renderList();
+    renderDetail();
+    refreshPortfolioGit();
+    const pp = state.byPath.get(state.portfolio.path);
+    pfForm.innerHTML = `
+      <h2>✦ ${res.created ? 'Added to' : 'Updated in'} your portfolio</h2>
+      <p>Wrote <code>content/projects/${esc(res.slug)}.json</code>. <span class="ok">npm run validate passed.</span></p>
+      ${res.warnings.length ? `<pre class="pf-output warn">${esc(res.warnings.join('\n'))}</pre>` : ''}
+      <p class="hint">Nothing was committed. Review the change, then commit and push the portfolio to publish it.</p>
+      <div class="row end">
+        ${pp?.defaultCommandId ? '<button type="button" data-pf="preview">▶ Preview site</button>' : ''}
+        <button type="button" data-pf="close" class="primary">Done</button>
+      </div>`;
+  } catch {
+    // call() already showed the error
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
+});
+
+pfForm.addEventListener('click', (e) => {
+  const action = e.target.closest('[data-pf]')?.dataset.pf;
+  if (action === 'close') pfDialog.close();
+  if (action === 'preview') {
+    const pp = state.byPath.get(state.portfolio.path);
+    pfDialog.close();
+    if (!pp) return;
+    if (!isRunning(pp.path)) startCommand(pp, pp.defaultCommandId);
+    select(pp.path);
+    document.querySelector('.project-row.selected')?.scrollIntoView({ block: 'nearest' });
+  }
+});
+
+function refreshPortfolioGit() {
+  const pp = state.byPath.get(state.portfolio.path);
+  if (pp?.isGit) actions['refresh-git'](pp);
+}
+
 
 // ---- boot ------------------------------------------------------------------
 (async () => {

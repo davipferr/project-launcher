@@ -22,6 +22,8 @@ npm start
 - **Process management**: streams logs live, detects `http://localhost:…` URLs, and shows exit codes. Stop kills the whole process tree. Closing the window with servers running asks before quitting.
 - **Open in** your editor (`code` by default, configurable), Explorer, or Windows Terminal.
 
+- **Add to portfolio**: the ✦ button writes an entry for the selected project into your portfolio site (`content/projects/<slug>.json` in its local clone, found automatically or set in Settings). The form is pre-filled from `package.json`, the README, the git remote, the first commit date and the detected stack. You fill in the Portuguese text and pick a category or zodiac constellation. Saving runs the portfolio's own `npm run validate`, and a failed check leaves no file behind. Nothing is committed or pushed: you review and publish the portfolio yourself. Projects already in the portfolio are marked ✦ in the list.
+
 Shortcuts: `/` search · `↑/↓` select · `Enter` run default · `e` editor · `t` terminal · `Ctrl+R` rescan.
 
 ## How it's built (the learning part)
@@ -34,6 +36,7 @@ src/
     git.js         `git status --porcelain=v2` parsing, concurrency limiter
     processes.js   child processes, log buffering, kill-tree
     settings.js    JSON file in %APPDATA%/project-launcher
+    portfolio.js   "Add to portfolio": prefill, write the entry, run the site's validator
   preload.js       the bridge: exposes a small `window.api`
   renderer/        ← browser side: plain HTML/CSS/JS, sandboxed
 ```

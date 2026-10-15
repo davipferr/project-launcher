@@ -10,6 +10,8 @@ const DEFAULTS = {
   favorites: [], // project paths
   defaultCommand: {}, // projectPath -> commandId
   customCommands: {}, // projectPath -> [{ id, label, cmd }]
+  portfolio: null, // local clone of the portfolio site; null = auto-detect among scanned projects
+  portfolioEntries: {}, // projectPath -> slug of its content/projects/<slug>.json
 };
 
 class Settings {

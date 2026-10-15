@@ -142,6 +142,27 @@ test('pagesUrl guesses the GitHub Pages URL from a deploy-pages workflow', async
   }
 });
 
+test('remove deletes the entry and its images, and only plain slugs', async () => {
+  const dir = fakePortfolio();
+  try {
+    await pf.save(dir, entry);
+    const images = path.join(dir, 'public', 'projects', 'demo');
+    fs.mkdirSync(images, { recursive: true });
+    fs.writeFileSync(path.join(images, 'cover.webp'), 'x');
+
+    const res = await pf.remove(dir, 'demo');
+    assert.equal(res.slug, 'demo');
+    assert.equal(fs.existsSync(path.join(dir, 'content', 'projects', 'demo.json')), false);
+    assert.equal(fs.existsSync(images), false);
+
+    await assert.rejects(pf.remove(dir, 'demo'), /No portfolio entry/);
+    await assert.rejects(pf.remove(dir, '../package'), /Invalid slug/);
+    assert.equal(fs.existsSync(path.join(dir, 'package.json')), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('prefill reads an existing entry, else guesses from the project files', async () => {
   const dir = fakePortfolio();
   const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'proj-'));

@@ -573,6 +573,7 @@ function renderPortfolioForm() {
     <div class="pf-langs">${lang('en', 'English')}${lang('pt', 'Português')}</div>
     <pre class="pf-output" hidden></pre>
     <div class="row end">
+      ${existing ? '<button type="button" data-pf="remove" class="danger pf-remove">Remove from portfolio</button>' : ''}
       <button type="button" data-pf="close">Cancel</button>
       <button type="submit" class="primary">Save</button>
     </div>`;
@@ -647,9 +648,19 @@ pfForm.addEventListener('submit', async (e) => {
   }
 });
 
-pfForm.addEventListener('click', (e) => {
+pfForm.addEventListener('click', async (e) => {
   const action = e.target.closest('[data-pf]')?.dataset.pf;
   if (action === 'close') pfDialog.close();
+  if (action === 'remove') {
+    const res = await call(api.portfolioRemove, pf.project.path, pf.entry.slug);
+    if (!res) return; // cancelled in the confirmation box
+    pfDialog.close();
+    state.portfolio = await api.portfolioInfo();
+    renderList();
+    renderDetail();
+    refreshPortfolioGit();
+    toast(`Removed ${res.slug} from your portfolio. Nothing was committed.`);
+  }
   if (action === 'preview') {
     const pp = state.byPath.get(state.portfolio.path);
     pfDialog.close();

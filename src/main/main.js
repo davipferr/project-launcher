@@ -253,6 +253,23 @@ function registerIpc() {
     return result;
   });
 
+  ipcMain.handle('portfolio:remove', async (_e, p, slug) => {
+    project(p);
+    const dir = await requirePortfolio();
+    const choice = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Remove', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      message: `Remove "${slug}" from your portfolio?`,
+      detail: `Deletes content/projects/${slug}.json and public/projects/${slug}/ in ${dir}. Nothing is committed, so you can still restore it with git.`,
+    });
+    if (choice.response !== 0) return null;
+    const result = await portfolio.remove(dir, slug);
+    settings.update((s) => delete s.portfolioEntries[p]);
+    return result;
+  });
+
   ipcMain.handle('open:editor', (_e, p) => {
     const dir = project(p).path;
     // `code` is code.cmd on Windows, so it needs a shell; quote the path.

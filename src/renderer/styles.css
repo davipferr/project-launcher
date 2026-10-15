@@ -267,3 +267,4 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .pf-form .row { display: flex; gap: 8px; }
 .pf-form .row.end { justify-content: flex-end; margin-top: 4px; }
 @media (max-width: 760px) { .pf-grid { grid-template-columns: 1fr 1fr; } .pf-langs { grid-template-columns: 1fr; } }
+.pf-form .pf-remove { margin-right: auto; }

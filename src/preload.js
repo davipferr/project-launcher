@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   portfolioInfo: invoke('portfolio:info'),
   portfolioPrefill: invoke('portfolio:prefill'),
   portfolioSave: invoke('portfolio:save'),
+  portfolioRemove: invoke('portfolio:remove'),
 
   openEditor: invoke('open:editor'),
   openFolder: invoke('open:folder'),

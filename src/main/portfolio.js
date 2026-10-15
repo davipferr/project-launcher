@@ -298,8 +298,23 @@ async function save(portfolio, input) {
   return { ...result, file, slug: entry.slug, created: before === null };
 }
 
+/**
+ * Take a project out of the portfolio: its entry file and its images folder
+ * (public/projects/<slug>/). Like save(), it only touches the working tree.
+ */
+async function remove(portfolio, slug) {
+  if (!(await isPortfolio(portfolio))) throw new Error(`Not a portfolio folder: ${portfolio}`);
+  const file = entryFile(portfolio, slug); // also rejects anything that isn't a plain slug
+  if (!(await exists(file))) throw new Error(`No portfolio entry named ${slug}.json`);
+  await fs.rm(file);
+  const images = path.join(portfolio, 'public', 'projects', slug);
+  const hadImages = await exists(images);
+  if (hadImages) await fs.rm(images, { recursive: true, force: true });
+  return { slug, file, images: hadImages ? images : null };
+}
+
 module.exports = {
-  isPortfolio, options, prefill, save, listEntries, pagesUrl,
+  isPortfolio, options, prefill, save, remove, listEntries, pagesUrl,
   // exported for tests
   slugify, titleCase, githubUrl, readmeIntro, guessTags, guessCategory, cleanEntry,
 };

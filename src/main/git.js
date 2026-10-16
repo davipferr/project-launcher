@@ -33,10 +33,11 @@ function limiter(n) {
 
 /** Parse `git status --porcelain=v2 --branch` output. */
 function parseStatus(out) {
-  const s = { branch: null, upstream: null, ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicts: 0, files: [] };
+  const s = { branch: null, oid: null, upstream: null, ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicts: 0, files: [] };
   for (const line of out.split('\n')) {
     if (!line) continue;
-    if (line.startsWith('# branch.head ')) s.branch = line.slice(14);
+    if (line.startsWith('# branch.oid ')) s.oid = line.slice(13);
+    else if (line.startsWith('# branch.head ')) s.branch = line.slice(14);
     else if (line.startsWith('# branch.upstream ')) s.upstream = line.slice(18);
     else if (line.startsWith('# branch.ab ')) {
       const m = line.match(/\+(\d+) -(\d+)/);
@@ -66,17 +67,27 @@ function parseStatus(out) {
 
 const limit = limiter(6);
 
+// Last commit per repo, keyed by the HEAD commit it was read for. Starting a process is the
+// slow part on Windows, so `git log` only runs again when `git status` reports a new HEAD.
+const lastCommits = new Map(); // dir -> { oid, lastCommit }
+
 async function status(dir) {
   return limit(async () => {
     try {
       const out = await git(dir, ['status', '--porcelain=v2', '--branch', '--untracked-files=normal']);
       const s = parseStatus(out);
-      try {
-        const log = await git(dir, ['log', '-1', '--format=%ct%x1f%an%x1f%s']);
-        const [ts, author, subject] = log.trim().split('\x1f');
-        s.lastCommit = { time: Number(ts) * 1000, author, subject };
-      } catch {
-        s.lastCommit = null; // repo with no commits yet
+      const cached = lastCommits.get(dir);
+      if (cached && s.oid && cached.oid === s.oid) {
+        s.lastCommit = cached.lastCommit;
+      } else {
+        try {
+          const log = await git(dir, ['log', '-1', '--format=%ct%x1f%an%x1f%s']);
+          const [ts, author, subject] = log.trim().split('\x1f');
+          s.lastCommit = { time: Number(ts) * 1000, author, subject };
+        } catch {
+          s.lastCommit = null; // repo with no commits yet
+        }
+        lastCommits.set(dir, { oid: s.oid, lastCommit: s.lastCommit });
       }
       return { ok: true, ...s };
     } catch (err) {

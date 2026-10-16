@@ -71,11 +71,6 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
 .warn { color: var(--red); }
 .ok { color: var(--green); }
 
-/* ---- flames background (flames-bg.js) ---- */
-/* sized and placed over the detail pane by flames-bg.js */
-#flames-bg { position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 0; }
-.topbar, .layout { position: relative; z-index: 1; }
-
 /* ---- top bar ---- */
 .topbar {
   display: flex;

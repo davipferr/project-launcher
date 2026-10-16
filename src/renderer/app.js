@@ -71,16 +71,31 @@ async function scan() {
 }
 
 let lastGitRefresh = 0;
-function refreshGit() {
+let gitPass = 0;
+/**
+ * Re-reads git status for every repo. Each repo costs a git process, and on Windows starting
+ * ~50 of them at once stalls the whole app for seconds. So with `gentle`, the `first` paths are
+ * done right away and the rest one at a time with a pause in between.
+ */
+async function refreshGit({ gentle = false, first = [] } = {}) {
   lastGitRefresh = Date.now();
-  for (const p of state.projects) {
-    if (!p.isGit) continue;
-    api.gitStatus(p.path).then((s) => {
-      state.git.set(p.path, s);
-      updateRow(p.path);
-      if (state.selected === p.path) renderGit();
-    });
+  const pass = ++gitPass;
+  const repos = state.projects.filter((p) => p.isGit);
+  if (!gentle) return Promise.all(repos.map(updateGit));
+  await Promise.all(repos.filter((p) => first.includes(p.path)).map(updateGit));
+  for (const p of repos.filter((p) => !first.includes(p.path))) {
+    if (pass !== gitPass) return; // a newer refresh took over
+    await updateGit(p);
+    await new Promise((r) => setTimeout(r, 40));
   }
+}
+
+function updateGit(p) {
+  return api.gitStatus(p.path).then((s) => {
+    state.git.set(p.path, s);
+    updateRow(p.path);
+    if (state.selected === p.path) renderGit();
+  });
 }
 
 function replaceProject(updated) {
@@ -369,9 +384,10 @@ api.onRunRemoved((id) => {
 
 api.onToast(toast);
 
-// Coming back to the launcher after committing in another window: refresh.
+// Coming back to the launcher after committing in another window: refresh, starting with the
+// selected project and the portfolio, and gently for the rest so switching back stays smooth.
 api.onFocus(() => {
-  if (Date.now() - lastGitRefresh > 5000) refreshGit();
+  if (Date.now() - lastGitRefresh > 5000) refreshGit({ gentle: true, first: [state.selected, state.portfolio.path] });
 });
 
 // Tick the "running for 3m 12s" label.
